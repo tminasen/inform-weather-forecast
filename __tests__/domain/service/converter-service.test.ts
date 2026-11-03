@@ -236,3 +236,105 @@ describe('test converter service tomorrow', () => {
     ).toEqual(correctData);
   });
 });
+
+describe('MTH47 toDetailInformation when weather data is missing', () => {
+  const PLACE = 'https://weather.yahoo.co.jp/weather/jp/11/4310.html';
+  let service: ConverterService;
+
+  beforeEach(() => {
+    service = container.get<ConverterService>(TYPES.ConverterService);
+  });
+
+  const undefinedWeatherDateMap = (): Map<DATE, WeatherDate> =>
+    new Map([
+      [DATE.TODAY, ({ weather: undefined, date: undefined } as unknown) as WeatherDate],
+      [DATE.TOMORROW, ({ weather: undefined, date: undefined } as unknown) as WeatherDate],
+    ]);
+  const undefinedTemperatureMap = (): Map<TEMPERATURE, string> =>
+    new Map(([
+      [TEMPERATURE.MAX, undefined],
+      [TEMPERATURE.MIN, undefined],
+    ] as unknown) as Array<[TEMPERATURE, string]>);
+
+  it('MTH47-T51 should throw when all maps are empty even if index exists', () => {
+    // Given
+    const indexMap = new Map([[INDEX.WASHING, 'washingComment1']]);
+    // When / Then
+    expect(() => service.toDetailInformation(indexMap, new Map(), new Map(), DATE.TODAY, PLACE)).toThrow(
+      new Error('weather data not found: target=今日 place=' + PLACE)
+    );
+  });
+
+  it('MTH47-T52 should throw when keys exist but values are undefined', () => {
+    // Given
+    const indexMap = new Map<INDEX, string>();
+    // When / Then
+    expect(() =>
+      service.toDetailInformation(indexMap, undefinedWeatherDateMap(), undefinedTemperatureMap(), DATE.TODAY, PLACE)
+    ).toThrow(new Error('weather data not found: target=今日 place=' + PLACE));
+  });
+
+  it('MTH47-T53 should return as before when only weather is available', () => {
+    // Given
+    const weatherDateMap = new Map([[DATE.TODAY, ({ weather: '曇り', date: undefined } as unknown) as WeatherDate]]);
+    // When
+    const result = service.toDetailInformation(new Map(), weatherDateMap, new Map(), DATE.TODAY, PLACE);
+    // Then
+    expect(result).toEqual({
+      date: 'undefinedの天気',
+      notificationData: [
+        { name: '天気', value: '曇り' },
+        { name: 'url', value: PLACE },
+      ],
+    });
+  });
+
+  it('MTH47-T54 should return as before when only date is available', () => {
+    // Given
+    const weatherDateMap = new Map([
+      [DATE.TODAY, ({ weather: undefined, date: '5月15日（水）' } as unknown) as WeatherDate],
+    ]);
+    // When
+    const result = service.toDetailInformation(new Map(), weatherDateMap, new Map(), DATE.TODAY, PLACE);
+    // Then
+    expect(result).toEqual({
+      date: '5月15日（水）の天気',
+      notificationData: [{ name: 'url', value: PLACE }],
+    });
+  });
+
+  const oneTemperature: Array<[string, Array<[TEMPERATURE, string | undefined]>]> = [
+    [
+      'max',
+      [
+        [TEMPERATURE.MAX, '23℃[+3]'],
+        [TEMPERATURE.MIN, undefined],
+      ],
+    ],
+    [
+      'min',
+      [
+        [TEMPERATURE.MAX, undefined],
+        [TEMPERATURE.MIN, '17℃[0]'],
+      ],
+    ],
+  ];
+  it.each(oneTemperature)('MTH47-T55 should return as before when only %s temperature is available', (_n, entries) => {
+    // Given
+    const temperatureMap = new Map(entries) as Map<TEMPERATURE, string>;
+    // When
+    const result = service.toDetailInformation(new Map(), new Map(), temperatureMap, DATE.TODAY, PLACE);
+    // Then
+    expect(result).toEqual({
+      date: 'undefinedの天気',
+      notificationData: [{ name: 'url', value: PLACE }],
+    });
+  });
+
+  it('MTH47-T56 should throw for tomorrow when nothing is available', () => {
+    // Given / When / Then
+    expect(() =>
+      service.toDetailInformation(new Map(), undefinedWeatherDateMap(), undefinedTemperatureMap(), DATE.TOMORROW, PLACE)
+    ).toThrow(new Error('weather data not found: target=明日 place=' + PLACE));
+  });
+});
