@@ -119,6 +119,15 @@ export class ConverterService {
     place: string
   ): { date: string; notificationData: NotificationData } {
     const weatherDate: WeatherDate | undefined = weatherDateMap.get(date);
+    // 天気・日付・気温がすべて取れていないときは、通知する内容がないため失敗として扱う
+    if (
+      !weatherDate?.weather &&
+      !weatherDate?.date &&
+      !temperatureMap.get(TEMPERATURE.MAX) &&
+      !temperatureMap.get(TEMPERATURE.MIN)
+    ) {
+      throw new Error(`weather data not found: target=${date} place=${place}`);
+    }
     const data = detailInformationToNotificationData({
       weather: weatherDate?.weather,
       maxTemperature: temperatureMap.get(TEMPERATURE.MAX),

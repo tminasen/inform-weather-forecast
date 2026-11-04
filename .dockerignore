@@ -1,0 +1,10 @@
+.git
+.github
+node_modules
+dist
+coverage
+__tests__
+scripts
+deploy
+*.md
+.env*

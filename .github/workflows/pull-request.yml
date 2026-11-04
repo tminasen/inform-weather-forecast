@@ -9,10 +9,10 @@ jobs:
   check_pull_request:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: setup
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -28,3 +28,12 @@ jobs:
 
       - name: build
         run: npm run build
+
+      - name: actionlint
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color
+
+      - name: hadolint
+        run: docker run --rm -i hadolint/hadolint:v2.15.1 < Dockerfile
+
+      - name: docker build
+        run: docker build --platform linux/amd64 --provenance=false --sbom=false .

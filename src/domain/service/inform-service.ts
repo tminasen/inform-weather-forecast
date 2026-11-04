@@ -31,7 +31,8 @@ export class InformService {
         ],
       },
     };
-    console.info('request param:', param);
+    // url は Webhook URL（秘密情報）のため、ログに出さない
+    console.info('request param:', param.data);
     await this.httpRequest.post(param);
   }
 }

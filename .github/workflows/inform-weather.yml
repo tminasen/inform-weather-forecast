@@ -1,11 +1,6 @@
 name: inform-weather
 
 on:
-  schedule:
-    # 07:30 JST
-    - cron: '30 22 * * *'
-    # 21:30 JST
-    - cron: '30 12 * * *'
   workflow_dispatch:
     inputs:
       target:
@@ -19,21 +14,19 @@ on:
 
 permissions:
   contents: read
-  actions: write
 
 jobs:
   inform:
     runs-on: ubuntu-latest
     env:
-      # 手動実行は入力値、定期実行は 21:30 JST(12:30 UTC) のとき tomorrow、それ以外は today
-      TARGET: ${{ github.event_name == 'workflow_dispatch' && inputs.target || (github.event.schedule == '30 12 * * *' && 'tomorrow' || 'today') }}
+      TARGET: ${{ inputs.target }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: setup
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -57,9 +50,3 @@ jobs:
           DISCORD_MENTION: ${{ secrets.DISCORD_MENTION }}
         run: |
           curl -XPOST -H "Content-Type: application/json" -d "{\"content\": \"$DISCORD_MENTION inform-weather failure :umbrella:\",\"embeds\": [{\"title\": \"build detail\", \"color\": 14427686, \"fields\": [{\"name\": \"repository\",\"value\": \"$GITHUB_REPOSITORY\"}, {\"name\": \"action url\", \"value\": \"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\"}]}]}" "$DISCORD_URL"
-
-      # 60 日間リポジトリに動きがないと定期実行が止まるため、自分自身を有効化し直して期限をリセットする
-      - name: keep workflow enabled
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method PUT "/repos/${{ github.repository }}/actions/workflows/inform-weather.yml/enable"

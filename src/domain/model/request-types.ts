@@ -8,6 +8,7 @@ export type RequestParams = {
     readonly content: string;
     readonly embeds: ReadonlyArray<{
       readonly title: string;
+      readonly color?: number;
       readonly fields: ReadonlyArray<{
         readonly name: string;
         readonly value: string;

@@ -51,4 +51,16 @@ describe('InformService.informMessage', () => {
     // When / Then
     await expect(service.informMessage('5月15日(水)の天気', [])).rejects.toBe(error);
   });
+
+  it('MTH47-T66 should not pass the webhook url to console.info', async () => {
+    // Given
+    const infoSpy = jest.spyOn(console, 'info').mockImplementation(() => undefined);
+    httpRequest.post.mockResolvedValue({ status: 204, data: '' });
+    const service = new InformService(httpRequest, { url: 'https://example.test/SECRET', mention: '' });
+    // When
+    await service.informMessage('5月15日(水)の天気', [{ name: '天気', value: '曇り' }]);
+    // Then
+    expect(infoSpy).toHaveBeenCalled();
+    expect(JSON.stringify(infoSpy.mock.calls)).not.toContain('SECRET');
+  });
 });

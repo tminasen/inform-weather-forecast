@@ -1,0 +1,100 @@
+name: deploy
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+  id-token: write
+
+# 古いイメージの削除は「今回のイメージ以外をすべて削除」のため、デプロイが同時に走ると互いのイメージを消し合う。
+# 順番に実行する
+concurrency:
+  group: deploy-inform-weather
+  cancel-in-progress: false
+
+env:
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  GCP_REGION: ${{ vars.GCP_REGION }}
+  GAR_REPOSITORY: ${{ vars.GAR_REPOSITORY }}
+  IMAGE_NAME: inform-weather-forecast
+  IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/inform-weather-forecast
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: setup gcloud
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: configure docker
+        run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+
+      - name: build and push
+        run: |
+          docker build --platform linux/amd64 --provenance=false --sbom=false -t "$IMAGE:$GITHUB_SHA" .
+          docker push "$IMAGE:$GITHUB_SHA"
+
+      - name: resolve digest and media type
+        id: resolve
+        run: |
+          set -euo pipefail
+          # このイメージ名で始まる RepoDigests だけに絞り、ちょうど 1 件であることを確かめる
+          mapfile -t repo_digests < <(docker inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$IMAGE:$GITHUB_SHA" | grep -F -- "$IMAGE@" || true)
+          if [[ "${#repo_digests[@]}" -ne 1 ]]; then
+            echo "expected exactly one RepoDigest for $IMAGE, got ${#repo_digests[@]}" >&2
+            exit 1
+          fi
+          digest="${repo_digests[0]##*@}"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "invalid digest: $digest" >&2; exit 1; }
+          token="$(gcloud auth print-access-token)"
+          echo "::add-mask::${token}"
+          media_type="$(curl -fsS -H "Authorization: Bearer ${token}" \
+            "https://artifactregistry.googleapis.com/v1/projects/${GCP_PROJECT_ID}/locations/${GCP_REGION}/repositories/${GAR_REPOSITORY}/dockerImages/${IMAGE_NAME}@${digest}" \
+            | jq -r '.mediaType')"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          echo "media_type=${media_type}" >> "$GITHUB_OUTPUT"
+
+      # Job への対応はベータ（semver の後方互換保証の対象外）のため、パッチまで固定する
+      - name: deploy
+        uses: google-github-actions/deploy-cloudrun@v3.0.1
+        with:
+          job: inform-weather-forecast
+          image: ${{ env.IMAGE }}@${{ steps.resolve.outputs.digest }}
+          region: ${{ vars.GCP_REGION }}
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          secrets: |
+            DISCORD_URL=discord-url:latest
+            DISCORD_MENTION=discord-mention:latest
+          flags: --max-retries=0 --tasks=1 --task-timeout=300s --service-account=${{ vars.GCP_RUNTIME_SERVICE_ACCOUNT }}
+
+      - name: setup node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+
+      # デプロイが成功したときだけ動く。今回の digest 以外のイメージをすべて削除する
+      - name: delete stale images
+        env:
+          DEPLOYED_DIGEST: ${{ steps.resolve.outputs.digest }}
+          DEPLOYED_MEDIA_TYPE: ${{ steps.resolve.outputs.media_type }}
+        run: |
+          set -euo pipefail
+          gcloud artifacts docker images list "$IMAGE" --include-tags --format=json > images.json
+          node scripts/select-stale-images.js < images.json > stale.txt
+          while read -r ref; do
+            [[ "$ref" =~ ^[^@]+@sha256:[0-9a-f]{64}$ ]] || { echo "invalid ref: $ref" >&2; exit 1; }
+            gcloud artifacts docker images delete "$ref" --delete-tags --quiet
+          done < stale.txt
