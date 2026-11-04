@@ -13,5 +13,6 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
-USER node
+# 公式 node イメージの node ユーザー（UID/GID 1000）。hadolint DL3066 に従い数値で指定する
+USER 1000:1000
 ENTRYPOINT ["node", "dist/main.js"]
