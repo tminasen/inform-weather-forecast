@@ -10,7 +10,7 @@ Cloud Scheduler が Cloud Run Jobs を起動し（毎日 07:30 JST に今日、2
 - Artifact Registry には、**デプロイ中のイメージ 1 つだけ**を残す。ロールバックは、`git revert` と再デプロイで行う。
 
 ## 設定
-`DISCORD_URL` / `DISCORD_MENTION` は Secret Manager（`discord-url` / `discord-mention`）に置き、Job の環境変数として渡す。
+`DISCORD_URL` / `DISCORD_MENTION` は Secret Manager（`weather-forecast-discord-url` / `weather-forecast-discord-mention`）に置き、Job の環境変数として渡す。
 - `DISCORD_URL`（必須）: 通知先の Discord webhook URL
 - `DISCORD_MENTION`（任意）: 通知に付けるメンション（例: `<@&123>`）。未設定ならメンションなし
 

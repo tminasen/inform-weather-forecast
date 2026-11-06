@@ -56,11 +56,11 @@ gcloud artifacts repositories create "$GAR_REPOSITORY" \
 
 ```bash
 # 貼り付けた値は画面に表示されず、シェルの履歴にも残らない
-read -rs DISCORD_URL_VALUE && printf '%s' "$DISCORD_URL_VALUE" | gcloud secrets create discord-url --data-file=- ; unset DISCORD_URL_VALUE
-printf '%s' '<メンション。例: <@&123>>' | gcloud secrets create discord-mention --data-file=-
+read -rs DISCORD_URL_VALUE && printf '%s' "$DISCORD_URL_VALUE" | gcloud secrets create weather-forecast-discord-url --data-file=- ; unset DISCORD_URL_VALUE
+printf '%s' '<メンション。例: <@&123>>' | gcloud secrets create weather-forecast-discord-mention --data-file=-
 ```
 
-`discord-mention` も必ず作る。今の Repository secrets に両方あるため、両方を登録する前提にしている。
+`weather-forecast-discord-mention` も必ず作る。今の Repository secrets に両方あるため、両方を登録する前提にしている。
 
 ## 5. サービスアカウントと IAM（最小権限）
 
@@ -76,7 +76,7 @@ gcloud iam service-accounts create "$SCHEDULER_SA_NAME" --display-name="inform-w
 | デプロイ用 SA | `roles/run.developer`（Job の更新） | **Job 単位** | https://cloud.google.com/run/docs/reference/iam/roles 、https://cloud.google.com/run/docs/securing/managing-access |
 | デプロイ用 SA | `roles/iam.serviceAccountUser`（実行用 SA への actAs） | **実行用 SA に対して** | https://cloud.google.com/run/docs/configuring/jobs/service-identity 、https://cloud.google.com/iam/docs/service-accounts-actas |
 | デプロイ用 SA | `roles/iam.workloadIdentityUser`（WIF の principalSet に付ける） | デプロイ用 SA に対して（章 6） | https://cloud.google.com/iam/docs/workload-identity-federation-with-deployment-pipelines 、https://github.com/google-github-actions/auth#security-considerations |
-| 実行用 SA | `roles/secretmanager.secretAccessor` | **Secret 単位**（`discord-url` / `discord-mention`） | https://cloud.google.com/secret-manager/docs/access-control |
+| 実行用 SA | `roles/secretmanager.secretAccessor` | **Secret 単位**（`weather-forecast-discord-url` / `weather-forecast-discord-mention`） | https://cloud.google.com/secret-manager/docs/access-control |
 | Scheduler 用 SA | `run.jobs.runWithOverrides` を含むロール | **Job 単位** | https://cloud.google.com/run/docs/execute/jobs-on-schedule 、https://cloud.google.com/run/docs/execute/jobs#override-job-configuration 、https://cloud.google.com/run/docs/reference/iam/roles |
 
 ### 5-1. いま付けられるもの
@@ -91,7 +91,7 @@ gcloud iam service-accounts add-iam-policy-binding "$RUNTIME_SA" \
   --member="serviceAccount:$DEPLOY_SA" --role="roles/iam.serviceAccountUser"
 
 # 実行用 SA: Secret（Secret 単位）
-for s in discord-url discord-mention; do
+for s in weather-forecast-discord-url weather-forecast-discord-mention; do
   gcloud secrets add-iam-policy-binding "$s" \
     --member="serviceAccount:$RUNTIME_SA" --role="roles/secretmanager.secretAccessor"
 done
@@ -210,7 +210,7 @@ gcloud run jobs deploy inform-weather-forecast \
   --region="$GCP_REGION" \
   --max-retries=0 --tasks=1 --task-timeout=300s \
   --service-account="$RUNTIME_SA" \
-  --set-secrets=DISCORD_URL=discord-url:latest,DISCORD_MENTION=discord-mention:latest
+  --set-secrets=DISCORD_URL=weather-forecast-discord-url:latest,DISCORD_MENTION=weather-forecast-discord-mention:latest
 ```
 
 - `--max-retries=0` は、今と同じくリトライなしにして、失敗通知を重複させないため。
