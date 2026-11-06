@@ -76,8 +76,8 @@ jobs:
           region: ${{ vars.GCP_REGION }}
           project_id: ${{ vars.GCP_PROJECT_ID }}
           secrets: |
-            DISCORD_URL=discord-url:latest
-            DISCORD_MENTION=discord-mention:latest
+            DISCORD_URL=weather-forecast-discord-url:latest
+            DISCORD_MENTION=weather-forecast-discord-mention:latest
           flags: --max-retries=0 --tasks=1 --task-timeout=300s --service-account=${{ vars.GCP_RUNTIME_SERVICE_ACCOUNT }}
 
       - name: setup node
